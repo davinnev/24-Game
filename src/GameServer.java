@@ -12,6 +12,12 @@ import javax.jms.TextMessage;
 import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
+
 
 
 // This class serves as the game server that handles client's requests
@@ -21,6 +27,7 @@ public class GameServer extends UnicastRemoteObject implements Server{
 	private static final String DB_PASS = "c3358PASS";
     private java.sql.Connection dbConn;
     private String host;
+    private boolean gameInProgress = false;
 
     public GameServer(String host) throws RemoteException, NamingException, JMSException {
         // Connect to DB 
@@ -40,6 +47,89 @@ public class GameServer extends UnicastRemoteObject implements Server{
 		// Create connection->session->sender
 		createConnection();
         receiveMessageFromQueue();
+    }
+
+    class WaitingPlayer {
+        private String username;
+        private long joinTime;
+
+        public WaitingPlayer(String username, long joinTime) {
+            this.username = username;
+            this.joinTime = joinTime;
+        }
+        public String getUsername() {
+            return username;
+        }
+        public long getJoinTime() {
+            return joinTime;
+        }
+
+    }
+
+    private Timer checkStartGameTimer;
+    private static final int CHECK_START_GAME_INTERVAL = 1000; // 1 second
+    private void startCheckStartGameTimer() {
+        checkStartGameTimer = new Timer(true);
+        checkStartGameTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                checkStartGame();
+            }
+        }, 0, CHECK_START_GAME_INTERVAL);
+    }
+
+    private List<WaitingPlayer> waitingPlayers = new ArrayList<>();
+    private void initGameQueue() {
+        // Start the timer to check for game start
+        startCheckStartGameTimer();
+        waitingPlayers = new ArrayList<>();
+        System.out.println("Game queue initialized");
+    }
+
+    private void processJoinMessage(String message) {
+        // Parse the message to get the username
+        String[] parts = message.split(" ");
+        String username = parts[0];
+        long joinTime = Long.parseLong(parts[1]);
+
+        // Add the player to the waiting list
+        waitingPlayers.add(new WaitingPlayer(username, joinTime));
+        System.out.println("Player " + username + " joined the game queue at time " + joinTime);
+        checkStartGame();
+    }
+
+    private void checkStartGame() {
+        if (gameInProgress || waitingPlayers.size() < 2) {
+            return;
+        }
+        // sort players by wait time
+        waitingPlayers.sort(Comparator.comparingLong(WaitingPlayer::getJoinTime));
+
+        // immediately start if there are 4 players
+        if (waitingPlayers.size() >= 4) {
+            startGame(4);
+            return;
+        } 
+
+        // else check if it's been 10 seconds since the first player joined
+        else {
+            long currentTime = System.currentTimeMillis()/1000;
+            long earliestJoinTime = waitingPlayers.get(0).getJoinTime();
+            if (currentTime - earliestJoinTime >= 10) {
+                startGame(Math.min(waitingPlayers.size(), 4));
+                return;
+            }
+        }
+    }
+
+    private void startGame(int numPlayers) {
+        // remove the players from waiting list
+        for (int i = 0; i < numPlayers; i++) {
+            WaitingPlayer player = waitingPlayers.remove(0);
+            //System.out.println("Starting game with player: " + player.getUsername());
+        }
+        System.out.println("Starting game with " + numPlayers + " players at " + System.currentTimeMillis()/1000);
+        //gameInProgress = true;
     }
 
     // The following attributes and methods are used for the message queue purposes
@@ -102,18 +192,7 @@ public class GameServer extends UnicastRemoteObject implements Server{
 	public void receiveMessageFromQueue() throws JMSException {
 		createSession();
 		createReceiver();
-
         createMessageListener();
-		
-		// while(true) {
-		// 	Message m = queueReceiver.receive();
-		// 	if(m != null && m instanceof TextMessage) {
-		// 		TextMessage textMessage = (TextMessage)m;
-		// 		System.out.println("Received message: "+textMessage.getText());
-		// 	} else {
-		// 		break;
-		// 	}
-		// }
 	}
 
     // This function is used to create a message listener
@@ -124,6 +203,7 @@ public class GameServer extends UnicastRemoteObject implements Server{
                 try {
                     if (message instanceof TextMessage) {
                         TextMessage textMessage = (TextMessage) message;
+                        processJoinMessage(textMessage.getText());
                         System.out.println("Received message: " + textMessage.getText());
                     } else {
                         System.out.println("Received non-text message");
@@ -150,6 +230,7 @@ public class GameServer extends UnicastRemoteObject implements Server{
 	private void createReceiver() throws JMSException {
 		try {
 			queueReceiver = session.createConsumer(queue);
+            initGameQueue();
 		} catch (JMSException e) {
 			System.err.println("Failed to create session: " + e);
 			throw e;
