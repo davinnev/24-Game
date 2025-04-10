@@ -1,23 +1,160 @@
 import java.rmi.*;
 import java.rmi.server.*;
 import java.sql.*;
+import javax.jms.*;
+import javax.jms.ConnectionFactory;
+import javax.jms.JMSException;
+import javax.jms.Message;
+import javax.jms.MessageConsumer;
+import javax.jms.Queue;
+import javax.jms.Session;
+import javax.jms.TextMessage;
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+
 
 // This class serves as the game server that handles client's requests
 public class GameServer extends UnicastRemoteObject implements Server{
     private static final String DB_HOST = "jdbc:mysql://localhost:3306/c3358";
 	private static final String DB_USER = "c3358";
 	private static final String DB_PASS = "c3358PASS";
-    private Connection dbConn;
+    private java.sql.Connection dbConn;
+    private String host;
 
-    public GameServer() throws RemoteException {
+    public GameServer(String host) throws RemoteException, NamingException, JMSException {
         // Connect to DB 
         try {
             this.dbConn = DriverManager.getConnection(DB_HOST, DB_USER, DB_PASS);
             System.out.println("Database connected!");
         } catch (SQLException e) {
-            throw new IllegalStateException("Cannot connect the database!", e);
+            throw new java.lang.IllegalStateException("Cannot connect the database!", e);
         }
+
+        this.host = host;
+		// Access JNDI
+		createJNDIContext();
+		// Lookup JMS resources
+		lookupConnectionFactory();
+		lookupQueue();
+		// Create connection->session->sender
+		createConnection();
+        receiveMessageFromQueue();
     }
+
+    // The following attributes and methods are used for the message queue purposes
+    private Context jndiContext;
+	private void createJNDIContext() throws NamingException {
+		System.setProperty("org.omg.CORBA.ORBInitialHost", host);
+		System.setProperty("org.omg.CORBA.ORBInitialPort", "3700");
+		try {
+			jndiContext = new InitialContext();
+		} catch (NamingException e) {
+			System.err.println("Could not create JNDI API context: " + e);
+			throw e;
+		}
+	}
+	
+	private ConnectionFactory connectionFactory;
+	private void lookupConnectionFactory() throws NamingException {
+
+		try {
+			connectionFactory = (ConnectionFactory)jndiContext.lookup("jms/JPoker24GameConnectionFactory");
+		} catch (NamingException e) {
+			System.err.println("JNDI API JMS connection factory lookup failed: " + e);
+			throw e;
+		}
+	}
+	
+	private Queue queue;
+	private void lookupQueue() throws NamingException {
+
+		try {
+			queue = (Queue)jndiContext.lookup("jms/JPoker24GameQueue");
+		} catch (NamingException e) {
+			System.err.println("JNDI API JMS queue lookup failed: " + e);
+			throw e;
+		}
+	}
+
+    // private Topic topic;
+    // private void lookupTopic() throws NamingException {
+
+    //     try {
+    //         queue = (Queue)jndiContext.lookup("jms/JPoker24GameTopic");
+    //     } catch (NamingException e) {
+    //         System.err.println("JNDI API JMS topic lookup failed: " + e);
+    //         throw e;
+    //     }
+    // }
+	
+	private javax.jms.Connection connection;
+	private void createConnection() throws JMSException {
+		try {
+			connection = connectionFactory.createConnection();
+			connection.start();
+		} catch (JMSException e) {
+			System.err.println("Failed to create connection to JMS provider: " + e);
+			throw e;
+		}
+	}
+	
+	public void receiveMessageFromQueue() throws JMSException {
+		createSession();
+		createReceiver();
+
+        createMessageListener();
+		
+		// while(true) {
+		// 	Message m = queueReceiver.receive();
+		// 	if(m != null && m instanceof TextMessage) {
+		// 		TextMessage textMessage = (TextMessage)m;
+		// 		System.out.println("Received message: "+textMessage.getText());
+		// 	} else {
+		// 		break;
+		// 	}
+		// }
+	}
+
+    // This function is used to create a message listener
+    private void createMessageListener() throws JMSException {
+        queueReceiver.setMessageListener(new MessageListener() {
+            @Override
+            public void onMessage(Message message) {
+                try {
+                    if (message instanceof TextMessage) {
+                        TextMessage textMessage = (TextMessage) message;
+                        System.out.println("Received message: " + textMessage.getText());
+                    } else {
+                        System.out.println("Received non-text message");
+                    }
+                } catch (JMSException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+    }
+	
+	private Session session;
+	private void createSession() throws JMSException {
+		try {
+			session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+		} catch (JMSException e) {
+			System.err.println("Failed to create session: " + e);
+			throw e;
+		}
+	}
+	
+	// Was: QueueReceiver
+	private MessageConsumer queueReceiver;
+	private void createReceiver() throws JMSException {
+		try {
+			queueReceiver = session.createConsumer(queue);
+		} catch (JMSException e) {
+			System.err.println("Failed to create session: " + e);
+			throw e;
+		}
+	}
 
     // synchronized is used to retain consistency across server
 
@@ -131,14 +268,51 @@ public class GameServer extends UnicastRemoteObject implements Server{
     
     public static void main(String[] args) {
         System.out.println("Server started");
+        String host = "localhost";
+		GameServer app = null;
         try {
-            GameServer app = new GameServer();
+            app = new GameServer(host);
             System.setSecurityManager(new SecurityManager());
             Naming.rebind("GameServer", app);
             System.out.println("Service registered");
+
+            //keepAlive(app);
+
         } catch (Exception e) {
             System.err.println("Server Error: " + e.getMessage());
             e.printStackTrace();
-        }
+        } 
     }
+
+    // public static void keepAlive(final GameServer app) {
+    //    Runtime.getRuntime().addShutdownHook(new Thread() {
+    //         public void run() {
+    //             app.close();
+    //             System.out.println("Server closed");
+    //         }
+    //     });
+    // }
+
+    // public void close() {
+    //     System.out.println("Closing server resources...");
+    //     try {
+    //         if (queueReceiver != null) {
+    //             queueReceiver.close();
+    //         }
+    //         if (session != null) {
+    //             session.close();
+    //         }
+    //         if (connection != null) {
+    //             connection.close();
+    //         }
+    //         if (dbConn != null) {
+    //             dbConn.close();
+    //         }
+    //         System.out.println("All resources closed successfully");
+    //     } catch (Exception e) { 
+    //         System.err.println("Error closing resources: " + e.getMessage());
+    //         e.printStackTrace();
+    //     }
+		
+	// }
 }

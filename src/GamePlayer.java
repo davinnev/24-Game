@@ -2,6 +2,16 @@ import javax.swing.*;
 import java.awt.*;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import javax.jms.Connection;
+import javax.jms.ConnectionFactory;
+import javax.jms.JMSException;
+import javax.jms.MessageProducer;
+import javax.jms.Queue;
+import javax.jms.Session;
+import javax.jms.TextMessage;
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
 
 // This class serves as the client as a player in the game
 public class GamePlayer implements Runnable  {
@@ -16,6 +26,7 @@ public class GamePlayer implements Runnable  {
     private CardLayout cardLayout;
     private JPanel cardPanel;
     private String username;
+    private String host;
 
     // Getter function for username
     public String getUsername() {
@@ -38,7 +49,8 @@ public class GamePlayer implements Runnable  {
     }
 
     // This function helps with connecting with the RMI registry service
-    public GamePlayer() {
+    // Also to set up the connection with JMS queue
+    public GamePlayer(String host) throws NamingException, JMSException {
         try {
             Registry registry = LocateRegistry.getRegistry("localhost");
             this.gameServer = (Server)registry.lookup("GameServer");
@@ -46,10 +58,128 @@ public class GamePlayer implements Runnable  {
         } catch (Exception e){
             System.err.println("Error accessing RMI: " + e.toString());
         }
+        this.host = host;
+        
+        // Access JNDI
+        createJNDIContext();
+        // Lookup JMS resources
+        lookupConnectionFactory();
+        lookupQueue();
+        //lookupTopic();
+        // Create connection->session->sender
     }
+
+    private Context jndiContext;
+    private void createJNDIContext() throws NamingException {
+        System.setProperty("org.omg.CORBA.ORBInitialHost", host);
+        System.setProperty("org.omg.CORBA.ORBInitialPort", "3700");
+        try {
+            jndiContext = new InitialContext();
+        } catch (NamingException e) {
+            System.err.println("Could not create JNDI API context: " + e);
+            throw e;
+        }
+    }
+    
+    private ConnectionFactory connectionFactory;
+    private void lookupConnectionFactory() throws NamingException {
+
+        try {
+            connectionFactory = (ConnectionFactory)jndiContext.lookup("jms/JPoker24GameConnectionFactory");
+        } catch (NamingException e) {
+            System.err.println("JNDI API JMS connection factory lookup failed: " + e);
+            throw e;
+        }
+    }
+    
+    private Queue queue;
+    private void lookupQueue() throws NamingException {
+
+        try {
+            queue = (Queue)jndiContext.lookup("jms/JPoker24GameQueue");
+        } catch (NamingException e) {
+            System.err.println("JNDI API JMS queue lookup failed: " + e);
+            throw e;
+        }
+    }
+
+    // private Topic topic;
+    // private void lookupTopic() throws NamingException {
+
+    //     try {
+    //         queue = (Queue)jndiContext.lookup("jms/JPoker24GameTopic");
+    //     } catch (NamingException e) {
+    //         System.err.println("JNDI API JMS topic lookup failed: " + e);
+    //         throw e;
+    //     }
+    // }
+    
+    private Connection connection;
+    private void createConnection() throws JMSException {
+        try {
+            connection = connectionFactory.createConnection();
+            connection.start();
+        } catch (JMSException e) {
+            System.err.println("Failed to create connection to JMS provider: " + e);
+            throw e;
+        }
+    }
+
+    public void sendMessageToQueue() throws JMSException {
+        createConnection();
+        createSession();
+        createSender();			
+        TextMessage message = session.createTextMessage(); 
+        String messageContent = this.username + " " + String.valueOf(System.currentTimeMillis() / 1000); 
+        message.setText(messageContent);
+        queueSender.send(message);
+        System.out.println("Sending message "+ messageContent);
+        // send non-text control message to end
+        queueSender.send(session.createMessage());
+    }
+
+    private Session session;
+    private void createSession() throws JMSException {
+        System.out.println(connection.toString());
+        try {
+            session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+        } catch (JMSException e) {
+            System.err.println("Failed to create session: " + e);
+            throw e;
+        }
+    }
+    
+    // Was: QueueSender
+    private MessageProducer queueSender;
+    private void createSender() throws JMSException {
+        try {
+            queueSender = session.createProducer(queue);
+        } catch (JMSException e) {
+            System.err.println("Failed to create sender: " + e);
+            throw e;
+        }
+    }
+
+
     public static void main(String[] args){
-        SwingUtilities.invokeLater(new GamePlayer());
+        String host = "localhost";
+        GamePlayer player = null;
+        try {
+            player = new GamePlayer(host);
+            SwingUtilities.invokeLater(player);
+        } catch (NamingException | JMSException e) {
+            System.err.println("Program aborted");
+        } finally {
+            if(player != null) {
+                try {
+                    player.close();
+                } catch (Exception e) { }
+            }
+        }
     }
+
+    // Connecting to the message queue for game joining stage
+
 
     // The "show.." functions below help to transition between different UI pages
 
@@ -96,6 +226,11 @@ public class GamePlayer implements Runnable  {
         if (gamePanel == null) {
             gamePanel = new MainGame(this, gameServer);
             cardPanel.add(gamePanel, "game");
+            try {
+                sendMessageToQueue();
+            } catch (JMSException e) {
+
+            } 
         }
         frame.setSize(1000, 600);
         gamePanel.highlightActiveTab(gamePanel.gameTab);
@@ -148,6 +283,14 @@ public class GamePlayer implements Runnable  {
         if (gamePanel != null) {
             cardPanel.remove(gamePanel);
             gamePanel = null;
+        }
+    }
+
+    public void close() {
+        if(connection != null) {
+            try {
+                connection.close();
+            } catch (JMSException e) { }
         }
     }
 }
