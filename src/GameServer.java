@@ -17,8 +17,11 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
-
-
+import javax.jms.Topic;
+import javax.jms.TopicSession;
+import javax.jms.TopicSubscriber;
+import javax.jms.TopicConnection;
+import javax.jms.TopicConnectionFactory;
 
 // This class serves as the game server that handles client's requests
 public class GameServer extends UnicastRemoteObject implements Server{
@@ -47,6 +50,8 @@ public class GameServer extends UnicastRemoteObject implements Server{
 		// Create connection->session->sender
 		createConnection();
         receiveMessageFromQueue();
+
+        setUpTopic();
     }
 
     class WaitingPlayer {
@@ -64,6 +69,26 @@ public class GameServer extends UnicastRemoteObject implements Server{
             return joinTime;
         }
 
+    }
+
+    private TopicConnection topicConnection;
+    private TopicSession topicSession;
+    private TopicPublisher topicPublisher;
+    private Topic topic;
+    private TopicConnectionFactory topicFactory;
+    private void setUpTopic() {
+        try {
+            topicFactory = (TopicConnectionFactory)jndiContext.lookup("jms/JPoker24GameConnectionFactory");
+            topic = (Topic)jndiContext.lookup("jms/JPoker24GameTopic");
+            topicConnection = (TopicConnection) connectionFactory.createConnection();
+            topicSession = topicConnection.createTopicSession(false, Session.AUTO_ACKNOWLEDGE);
+            topicPublisher = topicSession.createPublisher(topic);
+            topicConnection.start();
+        } catch (JMSException e) {
+            System.err.println("Failed to create topic connection: " + e);
+        } catch (NamingException e) {
+            System.err.println("Failed to lookup topic: " + e);
+        }
     }
 
     private Timer checkStartGameTimer;
@@ -124,11 +149,39 @@ public class GameServer extends UnicastRemoteObject implements Server{
 
     private void startGame(int numPlayers) {
         // remove the players from waiting list
+        // while also store a list of joining players
+        // and notify them that the game is starting
+        List<String> joiningPlayers = new ArrayList<>();
+        for (int i = 0; i < numPlayers; i++) {
+            joiningPlayers.add(waitingPlayers.get(i).getUsername());
+        }
         for (int i = 0; i < numPlayers; i++) {
             WaitingPlayer player = waitingPlayers.remove(0);
-            //System.out.println("Starting game with player: " + player.getUsername());
         }
-        System.out.println("Starting game with " + numPlayers + " players at " + System.currentTimeMillis()/1000);
+
+
+        try {
+            // Notify the players that the game is starting
+            TextMessage message = topicSession.createTextMessage("Game is starting");
+            topicPublisher.publish(message);
+            System.out.println("Starting game with " + numPlayers + " players at " + System.currentTimeMillis()/1000);
+
+            StringBuilder messageUsernames = new StringBuilder();
+            for (int i = 0; i < joiningPlayers.size(); i++) {
+                messageUsernames.append(joiningPlayers.get(i));
+                if (i < joiningPlayers.size() - 1) {
+                    messageUsernames.append(" ");
+                }
+            }
+            // Create and send the message
+            message = topicSession.createTextMessage(messageUsernames.toString());
+            topicPublisher.publish(message);
+            System.out.println("Published game start message: " + messageUsernames.toString());
+        } catch (JMSException e) {
+            System.err.println("Error publishing message: " + e.getMessage());
+            e.printStackTrace();
+        }
+
         //gameInProgress = true;
     }
 

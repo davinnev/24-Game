@@ -12,6 +12,14 @@ import javax.jms.TextMessage;
 import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
+import javax.jms.Topic;
+import javax.jms.TopicSession;
+import javax.jms.TopicSubscriber;
+import javax.jms.TopicConnection;
+import javax.jms.TopicConnectionFactory;
+import javax.jms.MessageListener;
+import javax.jms.Message;
+
 
 // This class serves as the client as a player in the game
 public class GamePlayer implements Runnable  {
@@ -65,8 +73,7 @@ public class GamePlayer implements Runnable  {
         // Lookup JMS resources
         lookupConnectionFactory();
         lookupQueue();
-        //lookupTopic();
-        // Create connection->session->sender
+        setUpTopic();
     }
 
     private Context jndiContext;
@@ -160,6 +167,43 @@ public class GamePlayer implements Runnable  {
         }
     }
 
+    private TopicConnection topicConnection;
+    private TopicSession topicSession;
+    private TopicSubscriber topicSubscriber;
+    private Topic topic;
+    private TopicConnectionFactory topicFactory;
+    private void setUpTopic() {
+        try {
+            topicFactory = (TopicConnectionFactory)jndiContext.lookup("jms/JPoker24GameConnectionFactory");
+            topic = (Topic)jndiContext.lookup("jms/JPoker24GameTopic");
+            topicConnection = (TopicConnection) connectionFactory.createConnection();
+            topicSession = topicConnection.createTopicSession(false, Session.AUTO_ACKNOWLEDGE);
+            topicSubscriber = topicSession.createSubscriber(topic);
+
+            topicSubscriber.setMessageListener(new MessageListener() {
+                @Override
+                public void onMessage(Message message) {
+                    try {
+                        if (message instanceof TextMessage) {
+                            TextMessage textMessage = (TextMessage) message;
+                            String text = textMessage.getText();
+                            System.out.println("Received message: " + text);
+                        } else {
+                            System.out.println("Received non-text message");
+                        }
+                    } catch (JMSException e) {
+                        System.err.println("Failed to process message: " + e);
+                    }
+                }
+            });
+            topicConnection.start();
+        } catch (JMSException e) {
+            System.err.println("Failed to create topic connection: " + e);
+        } catch (NamingException e) {
+            System.err.println("Failed to lookup topic: " + e);
+        }
+    }
+
 
     public static void main(String[] args){
         String host = "localhost";
@@ -226,15 +270,19 @@ public class GamePlayer implements Runnable  {
         if (gamePanel == null) {
             gamePanel = new MainGame(this, gameServer);
             cardPanel.add(gamePanel, "game");
-            try {
-                sendMessageToQueue();
-            } catch (JMSException e) {
+            // try {
+            //     sendMessageToQueue();
+            // } catch (JMSException e) {
 
-            } 
+            // } 
         }
         frame.setSize(1000, 600);
         gamePanel.highlightActiveTab(gamePanel.gameTab);
         cardLayout.show(cardPanel, "game");
+    }
+
+    public void joinGame() throws JMSException {
+        sendMessageToQueue();
     }
     
     // This function helps initiating the UI on the auth page
