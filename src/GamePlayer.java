@@ -109,17 +109,6 @@ public class GamePlayer implements Runnable  {
             throw e;
         }
     }
-
-    // private Topic topic;
-    // private void lookupTopic() throws NamingException {
-
-    //     try {
-    //         queue = (Queue)jndiContext.lookup("jms/JPoker24GameTopic");
-    //     } catch (NamingException e) {
-    //         System.err.println("JNDI API JMS topic lookup failed: " + e);
-    //         throw e;
-    //     }
-    // }
     
     private Connection connection;
     private void createConnection() throws JMSException {
@@ -187,7 +176,27 @@ public class GamePlayer implements Runnable  {
                         if (message instanceof TextMessage) {
                             TextMessage textMessage = (TextMessage) message;
                             String text = textMessage.getText();
-                            System.out.println("Received message: " + text);
+
+                            if (text.startsWith("Game started for ")) {
+                                String[] usernames = text.split(" ");
+                                for (String uname : usernames) {
+                                    if (GamePlayer.this.getUsername().trim().equals(uname.trim())) {
+                                        System.out.println("You are already in the game");
+                                        gamePanel.setGameState("PLAYING");
+                                        return;
+                                    }
+                                }
+                            } else if (text.startsWith("Player info ")) {
+                                 GamePlayer.this.gamePanel.updatePlayersPanel(text);
+                            } else if (text.startsWith("Cards in the game ") && gamePanel.getGameState().equals("PLAYING")) {
+                                GamePlayer.this.gamePanel.displayCards(text);
+                            } else if (text.startsWith("Winner ")) {
+                                // show the game result
+                                System.out.println("Received winner: " + text);
+                                gamePanel.setGameState("FINISHED");
+                            } else {
+                                System.out.println("Received message: " + text);
+                            }
                         } else {
                             System.out.println("Received non-text message");
                         }
@@ -219,6 +228,18 @@ public class GamePlayer implements Runnable  {
                     player.close();
                 } catch (Exception e) { }
             }
+        }
+    }
+
+    public void sendAnswer(String answer) {
+        try {
+            TextMessage message = session.createTextMessage(); 
+            String messageContent = "Answer " + this.username + " " + System.currentTimeMillis()/1000 + " " + answer; 
+            message.setText(messageContent);
+            queueSender.send(message);
+            System.out.println("Sending message "+ messageContent);
+        } catch (JMSException e) {
+            System.err.println("Failed to send message: " + e);
         }
     }
 

@@ -22,6 +22,7 @@ import javax.jms.TopicSession;
 import javax.jms.TopicSubscriber;
 import javax.jms.TopicConnection;
 import javax.jms.TopicConnectionFactory;
+import java.util.Random;
 
 // This class serves as the game server that handles client's requests
 public class GameServer extends UnicastRemoteObject implements Server{
@@ -42,15 +43,12 @@ public class GameServer extends UnicastRemoteObject implements Server{
         }
 
         this.host = host;
-		// Access JNDI
+
 		createJNDIContext();
-		// Lookup JMS resources
 		lookupConnectionFactory();
 		lookupQueue();
-		// Create connection->session->sender
 		createConnection();
         receiveMessageFromQueue();
-
         setUpTopic();
     }
 
@@ -174,9 +172,11 @@ public class GameServer extends UnicastRemoteObject implements Server{
                 }
             }
             // Create and send the message
-            message = topicSession.createTextMessage(messageUsernames.toString());
+            message = topicSession.createTextMessage("Game started for " + messageUsernames.toString());
             topicPublisher.publish(message);
             System.out.println("Published game start message: " + messageUsernames.toString());
+            sendPlayerProfile(joiningPlayers);
+            generateRandomCards();
         } catch (JMSException e) {
             System.err.println("Error publishing message: " + e.getMessage());
             e.printStackTrace();
@@ -220,17 +220,6 @@ public class GameServer extends UnicastRemoteObject implements Server{
 		}
 	}
 
-    // private Topic topic;
-    // private void lookupTopic() throws NamingException {
-
-    //     try {
-    //         queue = (Queue)jndiContext.lookup("jms/JPoker24GameTopic");
-    //     } catch (NamingException e) {
-    //         System.err.println("JNDI API JMS topic lookup failed: " + e);
-    //         throw e;
-    //     }
-    // }
-	
 	private javax.jms.Connection connection;
 	private void createConnection() throws JMSException {
 		try {
@@ -242,6 +231,54 @@ public class GameServer extends UnicastRemoteObject implements Server{
 		}
 	}
 	
+    private void sendPlayerProfile(List<String> usernames) throws JMSException {
+        try {
+            PreparedStatement stmt = this.dbConn.prepareStatement("SELECT username, games_won, games_played, avg_win_time FROM user_info WHERE username = ?");
+
+            for (String username : usernames) {
+                stmt.setString(1, username);
+                ResultSet rs = stmt.executeQuery();
+                if (rs.next()) {
+                    String user = rs.getString("username");
+                    int gamesWon = rs.getInt("games_won");
+                    int gamesPlayed = rs.getInt("games_played");
+                    float avgWinTime = rs.getFloat("avg_win_time");
+
+                    String playerInfo =  String.format("Player info %s %d/%d %.1f", user, gamesWon, gamesPlayed, avgWinTime);
+                    TextMessage message = topicSession.createTextMessage(playerInfo);
+                    topicPublisher.publish(message);
+                    System.out.println("Published player profile: " + user + " " + gamesWon + " " + gamesPlayed + " " + avgWinTime);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Error retrieving player profile: " + e.getMessage());
+            e.printStackTrace();
+        } catch (JMSException e) {
+            System.err.println("Error publishing message: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+    }
+    private String[] currentGameCards;
+    public void generateRandomCards() {
+        Random random = new Random();
+        currentGameCards = new String[4];
+        for (int i = 0; i < 4; i++) {
+            int rank = random.nextInt(13) + 1;
+            int suit = random.nextInt(4);
+
+            currentGameCards[i] = String.valueOf(rank) + String.valueOf(suit);
+        }
+        try {
+            TextMessage message = topicSession.createTextMessage("Cards in the game " + String.join(" ", currentGameCards));
+            topicPublisher.publish(message);
+            System.out.println("Published game cards: " + "Cards in the game " + String.join(" ", currentGameCards)); 
+        } catch (JMSException e) {
+            System.err.println("Error publishing message: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
 	public void receiveMessageFromQueue() throws JMSException {
 		createSession();
 		createReceiver();
@@ -256,8 +293,22 @@ public class GameServer extends UnicastRemoteObject implements Server{
                 try {
                     if (message instanceof TextMessage) {
                         TextMessage textMessage = (TextMessage) message;
-                        processJoinMessage(textMessage.getText());
-                        System.out.println("Received message: " + textMessage.getText());
+                        String text = textMessage.getText();
+                        if (text.startsWith("Answer ")) {
+                            String[] answers = text.split(" ");
+                            if (!ExpressionParser.isCorrect24Solution(answers[3])) {
+                                System.out.println("Incorrect answer: " + text);
+                            } else {
+                                System.out.println("Correct answer: " + text);                    
+                                String winnerInfo =  "Winner " + answers[1] + " " + answers[3];
+                                message = topicSession.createTextMessage(winnerInfo);
+                                topicPublisher.publish(message);
+                                System.out.println("Published winner : " + winnerInfo);
+                            }
+                        } else {
+                            processJoinMessage(text);
+                            System.out.println("Received message: " + textMessage.getText());
+                        }
                     } else {
                         System.out.println("Received non-text message");
                     }

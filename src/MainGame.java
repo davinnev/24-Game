@@ -1,13 +1,24 @@
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.File;
+import java.util.Random;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import java.util.ArrayList;
+import java.util.List;
 
 // This class serves as the UI of the main game page
 public class MainGame extends GameLobby {
     private JPanel gamePanel;
     private JPanel playersPanel;
+    private JPanel cardsPanel;
+    private JTextField equationField;
     private CardLayout gameStateCards;
     private JPanel gameStatePanel;
+    private String state;
     
     // Card names for the different game states
     private static final String JOINING_STATE = "JOINING";
@@ -39,13 +50,15 @@ public class MainGame extends GameLobby {
         gameStatePanel.add(createFinishedPanel(), FINISHED_STATE);
         
         // Set default to joining state
+        this.state = JOINING_STATE;
         gameStateCards.show(gameStatePanel, JOINING_STATE);
         
         gamePanel.add(gameStatePanel, BorderLayout.CENTER);
         
         // Create player panel (right hand side)
-        playersPanel = createPlayersPanel();
-
+        updatePlayersPanel("this.username" + "0/0 0.0"); //TODO: empty string is ok?
+        rebuildPlayersPanel();
+        
         bodyPanel.add(gamePanel, BorderLayout.CENTER);
         bodyPanel.add(playersPanel, BorderLayout.EAST);
     }
@@ -53,6 +66,18 @@ public class MainGame extends GameLobby {
     // Method to change the game state
     public void setGameState(String state) {
         gameStateCards.show(gameStatePanel, state);
+        this.state = state;
+        if (this.state.equals(PLAYING_STATE)) {
+            bodyPanel.add(playersPanel, BorderLayout.EAST);
+        } else {
+            bodyPanel.remove(playersPanel);
+        }
+        bodyPanel.revalidate();
+        bodyPanel.repaint();
+    }
+
+    public String getGameState() {
+        return this.state;
     }
     
     // Method to show joining state
@@ -62,6 +87,8 @@ public class MainGame extends GameLobby {
     
     // Method to show playing state
     public void showPlayingState() {
+        gameStatePanel.remove(1);
+        gameStatePanel.add(createPlayingPanel(), PLAYING_STATE);
         setGameState(PLAYING_STATE);
     }
     
@@ -98,24 +125,107 @@ public class MainGame extends GameLobby {
         panel.add(joinButton);
         return panel;
     }
+
+    public void displayCards(String message) {
+        try {
+            // Clear previous cards
+            cardsPanel.removeAll();
+            
+            // Format: "Cards in the game 100 33 40 132"
+            String[] parts = message.split(" ");
+            
+            // Check if message has the expected format
+            if (parts.length >= 5) {
+                // Get card numbers starting from index 4
+                for (int i = 4; i < parts.length; i++) {
+                    int cardNumber = Integer.parseInt(parts[i]);
+                    
+                    // Create card label with image
+                    String imagePath = "../cards/" + cardNumber + ".gif";
+                    
+                    try {
+                        // Try to load the image
+                        ImageIcon cardIcon = new ImageIcon(imagePath);
+                        
+                        // Scale if needed
+                        Image img = cardIcon.getImage();
+                        Image scaledImg = img.getScaledInstance(120, 174, Image.SCALE_SMOOTH);
+                        cardIcon = new ImageIcon(scaledImg);
+                        
+                        // Add card to panel
+                        JLabel cardLabel = new JLabel(cardIcon);
+                        cardLabel.setBorder(BorderFactory.createLineBorder(Color.BLACK, 2));
+                        cardsPanel.add(cardLabel);
+                        
+                    } catch (Exception e) {
+                        // If image loading fails, add text label instead
+                        JLabel cardLabel = new JLabel("Card " + cardNumber);
+                        cardLabel.setPreferredSize(new Dimension(120, 174));
+                        cardLabel.setHorizontalAlignment(SwingConstants.CENTER);
+                        cardLabel.setBorder(BorderFactory.createLineBorder(Color.BLACK, 2));
+                        cardsPanel.add(cardLabel);
+                    }
+                }
+            }
+            
+            cardsPanel.revalidate();
+            cardsPanel.repaint();
+        } catch (Exception e) {
+            System.err.println("Error displaying cards: " + e.getMessage());
+        }
+    }
     
-    // Panel for the playing stage - current implementation
-    private JPanel createPlayingPanel() {
+    public JPanel createPlayingPanel() {
         JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(Color.WHITE);
         
-        // This is where the actual game UI will go
-        JLabel playingLabel = new JLabel("Game in progress...", JLabel.CENTER);
-        playingLabel.setFont(new Font("Arial", Font.BOLD, 16));
+        // Center panel for cards
+        cardsPanel = new JPanel();
+        cardsPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 20, 40));
+        cardsPanel.setBackground(Color.WHITE);
         
-        panel.add(playingLabel, BorderLayout.CENTER);
+        // Waiting message
+        JLabel waitingLabel = new JLabel("Waiting for cards from the server...", JLabel.CENTER);
+        waitingLabel.setFont(new Font("Arial", Font.ITALIC, 16));
+        cardsPanel.add(waitingLabel);
         
-        // Here you'll add your game elements later
+        // Bottom panel for input
+        JPanel inputPanel = new JPanel(new BorderLayout(10, 0));
+        inputPanel.setBorder(BorderFactory.createEmptyBorder(20, 40, 20, 40));
+        
+        equationField = new JTextField();
+        equationField.setFont(new Font("Arial", Font.PLAIN, 16));
+        
+        JButton submitButton = new JButton("Submit");
+        submitButton.addActionListener(e -> {
+            // Send the answer to the server
+            try {
+                String equation = equationField.getText().trim();
+                if (!equation.isEmpty()) {
+                    player.sendAnswer(equation);
+                    equationField.setText("");
+                }
+            } catch (Exception ex) {
+                System.err.println("Error submitting answer: " + ex.getMessage());
+            }
+        });
+        
+        JPanel equationPanel = new JPanel(new BorderLayout(5, 0));
+        equationPanel.add(new JLabel("Equation: "), BorderLayout.WEST);
+        equationPanel.add(equationField, BorderLayout.CENTER);
+        equationPanel.add(new JLabel(" = 24"), BorderLayout.EAST);
+        
+        inputPanel.add(equationPanel, BorderLayout.CENTER);
+        inputPanel.add(submitButton, BorderLayout.EAST);
+        
+        panel.add(cardsPanel, BorderLayout.CENTER);
+        panel.add(inputPanel, BorderLayout.SOUTH);
         
         return panel;
     }
     
     // Panel for the finished stage
-    private JPanel createFinishedPanel() {
+    public JPanel createFinishedPanel() {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         
@@ -149,122 +259,133 @@ public class MainGame extends GameLobby {
         return panel;
     }
     
-    // This function creates the 4 players panel on the right hand side
-    private JPanel createPlayersPanel() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setPreferredSize(new Dimension(200, 0));
-        panel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 5));
-        panel.setBackground(new Color(240, 240, 240));
+    private List<String[]> playersInfo = new ArrayList<>();
+
+    public void updatePlayersPanel(String profile) {
+        if (playersInfo == null) {
+            playersInfo = new ArrayList<>();
+        }
+    
+        try {
+            // Parse profile: "Player profile John 10/30 5.5"
+            String[] parts = profile.trim().split(" ");
+            if (parts.length >= 3) {
+                String name = parts[2];
+                String winRate = parts[3];
+                String avgTime = parts[4];
+                
+                // Check if player already exists
+                boolean playerFound = false;
+                for (int i = 0; i < playersInfo.size(); i++) {
+                    if (playersInfo.get(i)[0].equals(name)) {
+                        // Update existing player
+                        playersInfo.get(i)[1] = winRate;
+                        playersInfo.get(i)[2] = avgTime;
+                        playerFound = true;
+                        break;
+                    }
+                }
+                
+                // Add new player if not found
+                if (!playerFound) {
+                    playersInfo.add(new String[]{name, winRate, avgTime});
+                }
+                
+                // Move current user to the front
+                for (int i = 0; i < playersInfo.size(); i++) {
+                    if (playersInfo.get(i)[0].equals(this.username) && i > 0) {
+                        String[] temp = playersInfo.get(i);
+                        playersInfo.remove(i);
+                        playersInfo.add(0, temp);
+                        break;
+                    }
+                }
+                
+                // Rebuild the players panel
+                rebuildPlayersPanel();
+                }
+        } catch (Exception e) {
+            System.err.println("Error updating player panel: " + e.getMessage());
+        }
+    }
+
+    // Rebuild the players panel from scratch
+    private void rebuildPlayersPanel() {
+        // Create new panel
+        JPanel newPanel = new JPanel();
+        newPanel.setLayout(new BoxLayout(newPanel, BoxLayout.Y_AXIS));
+        newPanel.setPreferredSize(new Dimension(200, 0));
+        newPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 5));
+        newPanel.setBackground(new Color(240, 240, 240));
         
+        // Add header
         JLabel playersHeader = new JLabel("Players");
         playersHeader.setFont(new Font("Arial", Font.BOLD, 16));
         playersHeader.setAlignmentX(Component.CENTER_ALIGNMENT);
+        newPanel.add(playersHeader);
+        newPanel.add(Box.createRigidArea(new Dimension(0, 10)));
         
-        // Current user
-        JPanel currentUserPanel = new JPanel();
-        currentUserPanel.setLayout(new BoxLayout(currentUserPanel, BoxLayout.Y_AXIS));
-        currentUserPanel.setBackground(new Color(230, 255, 230));
-        currentUserPanel.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200)));
-        currentUserPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 70));
-        currentUserPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // Add each player
+        for (String[] profile : playersInfo) {
+            String name = profile[0];
+            String stats = "Win: " + profile[1] + " avg: " + profile[2] + "s";
+            boolean isCurrentUser = name.equals(this.username);
+            
+            // Create player panel
+            JPanel playerPanel = new JPanel();
+            playerPanel.setLayout(new BoxLayout(playerPanel, BoxLayout.Y_AXIS));
+            
+            // Set background based on if current user
+            if (isCurrentUser) {
+                playerPanel.setBackground(new Color(230, 255, 230)); // Green for current user
+            } else {
+                playerPanel.setBackground(new Color(245, 245, 245)); // Gray for others
+            }
+            
+            playerPanel.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200)));
+            playerPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 70));
+            playerPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            
+            // Add name and stats
+            JLabel nameLabel = new JLabel(name);
+            nameLabel.setFont(new Font("Arial", Font.BOLD, 14));
+            nameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            
+            JLabel statsLabel = new JLabel(stats);
+            statsLabel.setFont(new Font("Arial", Font.PLAIN, 12));
+            statsLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            
+            playerPanel.add(Box.createVerticalGlue());
+            playerPanel.add(nameLabel);
+            playerPanel.add(statsLabel);
+            playerPanel.add(Box.createVerticalGlue());
+            
+            newPanel.add(playerPanel);
+            newPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        }
         
-        JLabel nameLabel = new JLabel(this.username);
-        nameLabel.setFont(new Font("Arial", Font.BOLD, 14));
-        nameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
-        JLabel statsLabel = new JLabel("Win: 20/35 avg: 10.4s");
-        statsLabel.setFont(new Font("Arial", Font.PLAIN, 12));
-        statsLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
-        currentUserPanel.add(Box.createVerticalGlue());
-        currentUserPanel.add(nameLabel);
-        currentUserPanel.add(statsLabel);
-        currentUserPanel.add(Box.createVerticalGlue());
-        
-        panel.add(playersHeader);
-        panel.add(Box.createRigidArea(new Dimension(0, 10)));
-        panel.add(currentUserPanel);
-        panel.add(Box.createRigidArea(new Dimension(0, 10)));
-        
-        // Other players (dummy data)
-        addPlayerEntry(panel, "Some player", "Win: 20/35 avg: 10.4s");
-        addPlayerEntry(panel, "Someone", "Win: 20/35 avg: 10.4s");
-        addPlayerEntry(panel, "Somebody", "Win: 20/35 avg: 10.4s");
-        
-        return panel;
-    }
-    
-    // This function creates the other player's profile on the main game screen
-    private void addPlayerEntry(JPanel container, String name, String stats) {
-        JPanel playerPanel = new JPanel();
-        playerPanel.setLayout(new BoxLayout(playerPanel, BoxLayout.Y_AXIS));
-        playerPanel.setBackground(new Color(245, 245, 245));
-        playerPanel.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200)));
-        playerPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 70));
-        playerPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
-        JLabel nameLabel = new JLabel(name);
-        nameLabel.setFont(new Font("Arial", Font.BOLD, 14));
-        nameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
-        JLabel statsLabel = new JLabel(stats);
-        statsLabel.setFont(new Font("Arial", Font.PLAIN, 12));
-        statsLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
-        playerPanel.add(Box.createVerticalGlue());
-        playerPanel.add(nameLabel);
-        playerPanel.add(statsLabel);
-        playerPanel.add(Box.createVerticalGlue());
-        
-        container.add(playerPanel);
-        container.add(Box.createRigidArea(new Dimension(0, 5)));
-    }
-    
-    // Method to update player list for the game
-    public void updatePlayerList(String[] playerNames) {
-        // Clear existing players except the current user
-        playersPanel.removeAll();
-        
-        JLabel playersHeader = new JLabel("Players");
-        playersHeader.setFont(new Font("Arial", Font.BOLD, 16));
-        playersHeader.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
-        playersPanel.add(playersHeader);
-        playersPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        
-        // Add current user first
-        JPanel currentUserPanel = new JPanel();
-        currentUserPanel.setLayout(new BoxLayout(currentUserPanel, BoxLayout.Y_AXIS));
-        currentUserPanel.setBackground(new Color(230, 255, 230));
-        currentUserPanel.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200)));
-        currentUserPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 70));
-        currentUserPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
-        JLabel nameLabel = new JLabel(this.username);
-        nameLabel.setFont(new Font("Arial", Font.BOLD, 14));
-        nameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
-        JLabel statsLabel = new JLabel("Win: 20/35 avg: 10.4s");
-        statsLabel.setFont(new Font("Arial", Font.PLAIN, 12));
-        statsLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
-        currentUserPanel.add(Box.createVerticalGlue());
-        currentUserPanel.add(nameLabel);
-        currentUserPanel.add(statsLabel);
-        currentUserPanel.add(Box.createVerticalGlue());
-        
-        playersPanel.add(currentUserPanel);
-        playersPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        
-        // Add other players
-        for (String playerName : playerNames) {
-            if (!playerName.equals(this.username)) {
-                addPlayerEntry(playersPanel, playerName, "Win: 0/0 avg: 0.0s");
+        // Replace old panel
+        if (playersPanel != null) {
+            Container parent = playersPanel.getParent();
+            if (parent != null) {
+                int index = -1;
+                for (int i = 0; i < parent.getComponentCount(); i++) {
+                    if (parent.getComponent(i) == playersPanel) {
+                        index = i;
+                        break;
+                    }
+                }
+                
+                if (index >= 0) {
+                    parent.remove(index);
+                    parent.add(newPanel, index);
+                    parent.revalidate();
+                    parent.repaint();
+                }
             }
         }
         
-        playersPanel.revalidate();
-        playersPanel.repaint();
+        this.playersPanel = newPanel;
+        bodyPanel.add(playersPanel, BorderLayout.EAST);
     }
 }
