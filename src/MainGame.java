@@ -19,6 +19,7 @@ public class MainGame extends GameLobby {
     private CardLayout gameStateCards;
     private JPanel gameStatePanel;
     private String state;
+    private String message;
     
     // Card names for the different game states
     private static final String JOINING_STATE = "JOINING";
@@ -29,6 +30,14 @@ public class MainGame extends GameLobby {
     public MainGame(GamePlayer gamePlayer, Server gameServer) {
         super(gamePlayer, gameServer);
         highlightActiveTab(gameTab);
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
+    }
+
+    public String getMessage() {
+        return this.message;
     }
     
     @Override
@@ -65,13 +74,36 @@ public class MainGame extends GameLobby {
     
     // Method to change the game state
     public void setGameState(String state) {
+        if (state.equals(FINISHED_STATE)) {
+        // Remove the old panel first
+            for (Component comp : gameStatePanel.getComponents()) {
+                if (comp.getName() != null && comp.getName().equals(FINISHED_STATE)) {
+                    gameStatePanel.remove(comp);
+                    break;
+                }
+        }
+        
+        // Create and add the new panel
+        JPanel finishedPanel = createFinishedPanel();
+        finishedPanel.setName(FINISHED_STATE);
+        gameStatePanel.add(finishedPanel, FINISHED_STATE);
+        
+        // Apply layout changes before showing the panel
+        gameStatePanel.revalidate();
+        gameStatePanel.repaint();
+        }
+        
+        // Now show the requested panel
         gameStateCards.show(gameStatePanel, state);
         this.state = state;
+        
+        // Handle other layout adjustments
         if (this.state.equals(PLAYING_STATE)) {
             bodyPanel.add(playersPanel, BorderLayout.EAST);
         } else {
             bodyPanel.remove(playersPanel);
         }
+        
         bodyPanel.revalidate();
         bodyPanel.repaint();
     }
@@ -232,11 +264,21 @@ public class MainGame extends GameLobby {
         JLabel gameOverLabel = new JLabel("Game Over!");
         gameOverLabel.setFont(new Font("Arial", Font.BOLD, 24));
         gameOverLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        if (this.message == null || this.message.isEmpty()) {
+            this.message = "Game Over! No winner.";
+        }
+
+        String[] winnerMessage = this.message.split(" ", 3);
         
-        JLabel winnerLabel = new JLabel("Winner will be displayed here");
+        JLabel winnerLabel = new JLabel(winnerMessage[1] + " is the winner!");
         winnerLabel.setFont(new Font("Arial", Font.BOLD, 18));
         winnerLabel.setForeground(new Color(0, 128, 0)); // Green color
         winnerLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        JLabel expressionLabel = new JLabel(winnerMessage[2]);
+        expressionLabel.setFont(new Font("Arial", Font.BOLD, 25));
+        expressionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         
         JButton playAgainButton = new JButton("Play Again");
         playAgainButton.setFont(new Font("Arial", Font.BOLD, 16));
@@ -245,13 +287,23 @@ public class MainGame extends GameLobby {
         
         // Add action listener to reset the game state
         playAgainButton.addActionListener(e -> {
-            showJoiningState();
+            try {
+                player.joinGame();
+                playAgainButton.setEnabled(false);
+                playAgainButton.setText("Waiting for players...");
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, 
+                    "Failed to join game: " + ex.getMessage(), 
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            }
         });
-        
+
         panel.add(Box.createVerticalGlue());
         panel.add(gameOverLabel);
         panel.add(Box.createRigidArea(new Dimension(0, 20)));
         panel.add(winnerLabel);
+        panel.add(Box.createRigidArea(new Dimension(0, 30)));
+        panel.add(expressionLabel);
         panel.add(Box.createRigidArea(new Dimension(0, 30)));
         panel.add(playAgainButton);
         panel.add(Box.createVerticalGlue());

@@ -192,7 +192,9 @@ public class GamePlayer implements Runnable  {
                                 GamePlayer.this.gamePanel.displayCards(text);
                             } else if (text.startsWith("Winner ")) {
                                 // show the game result
-                                System.out.println("Received winner: " + text);
+                                // System.out.println("Received winner: " + text);
+                                gamePanel.setMessage(text);
+                                System.out.println("Panel winner: " + gamePanel.getMessage());
                                 gamePanel.setGameState("FINISHED");
                             } else {
                                 System.out.println("Received message: " + text);

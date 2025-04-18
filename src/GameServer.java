@@ -32,6 +32,8 @@ public class GameServer extends UnicastRemoteObject implements Server{
     private java.sql.Connection dbConn;
     private String host;
     private boolean gameInProgress = false;
+    private long gameStartTime = 0;
+    private long gameFinishTime = 0;
 
     public GameServer(String host) throws RemoteException, NamingException, JMSException {
         // Connect to DB 
@@ -146,6 +148,7 @@ public class GameServer extends UnicastRemoteObject implements Server{
     }
 
     private void startGame(int numPlayers) {
+        gameStartTime = System.currentTimeMillis();
         // remove the players from waiting list
         // while also store a list of joining players
         // and notify them that the game is starting
@@ -153,6 +156,7 @@ public class GameServer extends UnicastRemoteObject implements Server{
         for (int i = 0; i < numPlayers; i++) {
             joiningPlayers.add(waitingPlayers.get(i).getUsername());
         }
+        updatePlayersDatabase(joiningPlayers);
         for (int i = 0; i < numPlayers; i++) {
             WaitingPlayer player = waitingPlayers.remove(0);
         }
@@ -299,6 +303,8 @@ public class GameServer extends UnicastRemoteObject implements Server{
                             if (!ExpressionParser.isCorrect24Solution(answers[3])) {
                                 System.out.println("Incorrect answer: " + text);
                             } else {
+                                gameFinishTime = System.currentTimeMillis();
+                                updateWinnerDatabase(gameFinishTime - gameStartTime, answers[1]);
                                 System.out.println("Correct answer: " + text);                    
                                 String winnerInfo =  "Winner " + answers[1] + " " + answers[3];
                                 message = topicSession.createTextMessage(winnerInfo);
@@ -319,6 +325,43 @@ public class GameServer extends UnicastRemoteObject implements Server{
         });
     }
 	
+    private void updatePlayersDatabase(List<String> usernames) {
+        try {
+            for (String username : usernames) {
+                PreparedStatement stmt = this.dbConn.prepareStatement("UPDATE user_info SET games_played = games_played + 1 WHERE username = ?");
+                stmt.setString(1, username);
+                stmt.executeUpdate();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void updateWinnerDatabase(long gameTime, String winner) {
+        double winTime = gameTime / 1000.0;
+
+        try {
+            PreparedStatement stmt = this.dbConn.prepareStatement("SELECT games_won, avg_win_time FROM user_info WHERE username = ?");
+            stmt.setString(1, winner);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                int gamesWon = rs.getInt("games_won");
+                double avgWinTime = rs.getDouble("avg_win_time");
+
+                // Update the average win time
+                double newAvgWinTime = (avgWinTime * gamesWon + winTime) / (gamesWon + 1);
+                String updateQuery = "UPDATE user_info SET games_won = ?, avg_win_time = ? WHERE username = ?";
+                PreparedStatement updateStmt = this.dbConn.prepareStatement(updateQuery);
+                updateStmt.setInt(1, gamesWon + 1);
+                updateStmt.setDouble(2, newAvgWinTime);
+                updateStmt.setString(3, winner);
+                updateStmt.executeUpdate();
+            }
+        }   catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
 	private Session session;
 	private void createSession() throws JMSException {
 		try {
