@@ -1,6 +1,8 @@
 import javax.swing.*;
 import java.awt.*;
 import java.rmi.RemoteException;
+import java.sql.*;
+
 
 // This class is an abstraction to the game page
 public abstract class GameLobby extends JPanel {
@@ -18,6 +20,11 @@ public abstract class GameLobby extends JPanel {
 	protected JButton leaderboardTab;
 	protected JButton logoutTab;
 
+	private static final String DB_HOST = "jdbc:mysql://localhost:3306/c3358";
+	private static final String DB_USER = "c3358";
+	private static final String DB_PASS = "c3358PASS";
+	private java.sql.Connection dbConn;
+
 	// This function helps to change the current player if the client logout and re-login with different account
 	public void setUsername() {
 		this.username = player.getUsername();
@@ -28,8 +35,19 @@ public abstract class GameLobby extends JPanel {
 		return this.username;
 	}
 
+	public Connection getDBConn() {
+		return this.dbConn;
+	}
+
 	// The constructor takes the client and server object
 	public GameLobby(GamePlayer player, Server server) {
+		try {
+				this.dbConn = DriverManager.getConnection(DB_HOST, DB_USER, DB_PASS);
+				System.out.println("Database connected!");
+		} catch (SQLException e) {
+				throw new java.lang.IllegalStateException("Cannot connect the database!", e);
+		}
+
 		this.player = player;
 		this.server = server;
 		this.username = player.getUsername();

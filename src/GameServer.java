@@ -305,6 +305,7 @@ public class GameServer extends UnicastRemoteObject implements Server{
                             } else {
                                 gameFinishTime = System.currentTimeMillis();
                                 updateWinnerDatabase(gameFinishTime - gameStartTime, answers[1]);
+                                updateLeaderboard();
                                 System.out.println("Correct answer: " + text);                    
                                 String winnerInfo =  "Winner " + answers[1] + " " + answers[3];
                                 message = topicSession.createTextMessage(winnerInfo);
@@ -340,6 +341,7 @@ public class GameServer extends UnicastRemoteObject implements Server{
     private void updateWinnerDatabase(long gameTime, String winner) {
         double winTime = gameTime / 1000.0;
 
+        // Update the winner's games won and average win time
         try {
             PreparedStatement stmt = this.dbConn.prepareStatement("SELECT games_won, avg_win_time FROM user_info WHERE username = ?");
             stmt.setString(1, winner);
@@ -359,6 +361,38 @@ public class GameServer extends UnicastRemoteObject implements Server{
             }
         }   catch (SQLException e) {
             e.printStackTrace();
+        }
+    }
+
+    private void updateLeaderboard() {
+        List<String> rankedUsernames = new ArrayList<>();
+
+        try {
+            // Get the top players based on games won
+            PreparedStatement stmt = this.dbConn.prepareStatement("SELECT username FROM user_info ORDER BY games_won DESC");
+            ResultSet rs = stmt.executeQuery();
+            while (rs.next()) {
+                rankedUsernames.add(rs.getString("username"));
+            }
+
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        // Update rank of each player
+        for (int i = 0; i < rankedUsernames.size(); i++) {
+            String name = rankedUsernames.get(i);
+            int rank = i + 1;
+
+            try {
+                PreparedStatement stmt = this.dbConn.prepareStatement("UPDATE user_info SET `rank` = ? WHERE username = ?");
+                stmt.setInt(1, rank);
+                stmt.setString(2, name);
+                stmt.executeUpdate();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
     }
 

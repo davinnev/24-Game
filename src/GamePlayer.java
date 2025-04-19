@@ -277,6 +277,7 @@ public class GamePlayer implements Runnable  {
         frame.setLocationRelativeTo(null);
         profilePanel.highlightActiveTab(profilePanel.profileTab);
         cardLayout.show(cardPanel, "profile");
+        profilePanel.refreshProfile();
     }
 
     public void showLeaderboard() {
@@ -287,6 +288,7 @@ public class GamePlayer implements Runnable  {
         frame.setSize(1000, 600);
         leaderboardPanel.highlightActiveTab(leaderboardPanel.leaderboardTab);
         cardLayout.show(cardPanel, "leaderboard");
+        leaderboardPanel.refreshLeaderboard();
     }
 
     public void showMainGame() {
