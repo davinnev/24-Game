@@ -68,13 +68,13 @@ public class GamePlayer implements Runnable  {
         }
         this.host = host;
         
-        // Access JNDI
         createJNDIContext();
-        // Lookup JMS resources
         lookupConnectionFactory();
         lookupQueue();
         setUpTopic();
     }
+
+    // This part is used to setup queue and topic
 
     private Context jndiContext;
     private void createJNDIContext() throws NamingException {
@@ -145,7 +145,6 @@ public class GamePlayer implements Runnable  {
         }
     }
     
-    // Was: QueueSender
     private MessageProducer queueSender;
     private void createSender() throws JMSException {
         try {
@@ -233,6 +232,7 @@ public class GamePlayer implements Runnable  {
         }
     }
 
+    // This method is used to submit answer during game-playing stage
     public void sendAnswer(String answer) {
         try {
             TextMessage message = session.createTextMessage(); 
@@ -244,9 +244,6 @@ public class GamePlayer implements Runnable  {
             System.err.println("Failed to send message: " + e);
         }
     }
-
-    // Connecting to the message queue for game joining stage
-
 
     // The "show.." functions below help to transition between different UI pages
 
@@ -295,17 +292,13 @@ public class GamePlayer implements Runnable  {
         if (gamePanel == null) {
             gamePanel = new MainGame(this, gameServer);
             cardPanel.add(gamePanel, "game");
-            // try {
-            //     sendMessageToQueue();
-            // } catch (JMSException e) {
-
-            // } 
         }
         frame.setSize(1000, 600);
         gamePanel.highlightActiveTab(gamePanel.gameTab);
         cardLayout.show(cardPanel, "game");
     }
 
+    // This method helps to send a join request message to the server
     public void joinGame() throws JMSException {
         sendMessageToQueue();
     }

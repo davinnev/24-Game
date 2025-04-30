@@ -50,6 +50,8 @@ public class Leaderboard extends GameLobby {
         JScrollPane scrollPane = new JScrollPane(leaderboardTable);
         bodyPanel.add(scrollPane, BorderLayout.CENTER);
 
+        // Populate the table by retrieving user data from the database
+        // The row is sorted by rank in ascending order
         try {
             String query = "SELECT * FROM user_info ORDER BY `rank` ASC";
             PreparedStatement statement = super.getDBConn().prepareStatement(query);
@@ -65,27 +67,12 @@ public class Leaderboard extends GameLobby {
         } catch (SQLException e) {
             System.err.println("Error retrieving user data: " + e.getMessage());
         }
-        
-        // //  Dummy data
-        // tableModel.addRow(new Object[] {1, "Player 4", 20, 35, 10.4});
-        // tableModel.addRow(new Object[] {2, "Player 2", 18, 25, 13.2});
-        // tableModel.addRow(new Object[] {3, "Player 6", 18, 31, 15.1});
-        // tableModel.addRow(new Object[] {4, "Player 8", 16, 30, 12.8});
-        // tableModel.addRow(new Object[] {1, "Player 7", 10, 25, 10.2});
-        // tableModel.addRow(new Object[] {2, "Player 3", 5, 7, 17.1});
-        // tableModel.addRow(new Object[] {3, "Player 5", 4, 10, 15.4});
-        // tableModel.addRow(new Object[] {4, "Player 10", 1, 2, 16.2});
-        // tableModel.addRow(new Object[] {1, "Player 9", 1, 4, 14.1});
-        // tableModel.addRow(new Object[] {2, "Player 1", 1, 4, 18.4});
-
     }
 
     public void refreshLeaderboard() {
-        // Clear the existing content
+        // Reset and reinitialize the content
         bodyPanel.removeAll();
-        // Reinitialize the content
         initializeContent();
-        // Refresh the UI
         bodyPanel.revalidate();
         bodyPanel.repaint();
     }

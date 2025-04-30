@@ -101,11 +101,9 @@ public class Profile extends GameLobby {
 
     // This function helps to refresh the profile page
     public void refreshProfile() {
-        // Clear the existing content
+        // Reset and reinitialize the existing content
         bodyPanel.removeAll();
-        // Reinitialize the content
         initializeContent();
-        // Refresh the UI
         bodyPanel.revalidate();
         bodyPanel.repaint();
     }
