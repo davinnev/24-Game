@@ -20,6 +20,7 @@ public abstract class GameLobby extends JPanel {
 	protected JButton leaderboardTab;
 	protected JButton logoutTab;
 
+	// For DB connection
 	private static final String DB_HOST = "jdbc:mysql://localhost:3306/c3358";
 	private static final String DB_USER = "c3358";
 	private static final String DB_PASS = "c3358PASS";
@@ -35,6 +36,7 @@ public abstract class GameLobby extends JPanel {
 		return this.username;
 	}
 
+	// This function acts as a getter for the DB connection, used by the panels / subclasses
 	public Connection getDBConn() {
 		return this.dbConn;
 	}
@@ -69,7 +71,7 @@ public abstract class GameLobby extends JPanel {
 		// Create and add tabs to panel
 		profileTab = new JButton("User Profile");
 		headerPanel.add(profileTab);
-		gameTab = new JButton("Game");
+		gameTab = new JButton("Play Game");
 		headerPanel.add(gameTab);
 		leaderboardTab = new JButton("Leaderboard");
 		headerPanel.add(leaderboardTab);
