@@ -3,13 +3,13 @@ import java.awt.*;
 
 // This is an abstract class for the login and register page
 public abstract class PlayerAuth extends JPanel {
-    protected GamePlayer player;
+    protected JPoker24Game player;
     protected Server server;
     protected JLabel titleLabel;
     protected JLabel errorLabel;
     
     // A constructor to the page, given the client and server object
-    public PlayerAuth(GamePlayer player, Server server) {
+    public PlayerAuth(JPoker24Game player, Server server) {
         this.player = player;
         this.server = server;
         this.setLayout(new BorderLayout());

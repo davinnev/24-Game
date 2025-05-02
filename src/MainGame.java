@@ -27,7 +27,7 @@ public class MainGame extends GameLobby {
     private static final String FINISHED_STATE = "FINISHED";
     
     // The constructor follows superclass, then highlight the "Game" tab
-    public MainGame(GamePlayer gamePlayer, Server gameServer) {
+    public MainGame(JPoker24Game gamePlayer, Server gameServer) {
         super(gamePlayer, gameServer);
         highlightActiveTab(gameTab);
     }

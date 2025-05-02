@@ -8,7 +8,7 @@ public class PlayerLogin extends PlayerAuth{
     private JPasswordField passwordField;
     
     // Constructor following the superclass
-    public PlayerLogin(GamePlayer player, Server server) {
+    public PlayerLogin(JPoker24Game player, Server server) {
         super(player, server);
     }
 

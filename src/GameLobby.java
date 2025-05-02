@@ -6,7 +6,7 @@ import java.sql.*;
 
 // This class is an abstraction to the game page
 public abstract class GameLobby extends JPanel {
-	protected GamePlayer player;
+	protected JPoker24Game player;
 	protected Server server;
 	protected String username;
 
@@ -42,7 +42,7 @@ public abstract class GameLobby extends JPanel {
 	}
 
 	// The constructor takes the client and server object
-	public GameLobby(GamePlayer player, Server server) {
+	public GameLobby(JPoker24Game player, Server server) {
 		try {
 				this.dbConn = DriverManager.getConnection(DB_HOST, DB_USER, DB_PASS);
 				System.out.println("Database connected!");

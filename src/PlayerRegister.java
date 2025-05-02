@@ -9,7 +9,7 @@ public class PlayerRegister extends PlayerAuth{
     private JPasswordField confirmPasswordField;
     
     // Constructor following the superclass
-    public PlayerRegister(GamePlayer player, Server server) {
+    public PlayerRegister(JPoker24Game player, Server server) {
         super(player, server);
     }
 

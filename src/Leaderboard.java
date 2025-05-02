@@ -13,7 +13,7 @@ public class Leaderboard extends GameLobby {
     private DefaultTableModel tableModel;
 
     // The constructor follows superclass, then highlight the "Leaderboard" tab
-    public Leaderboard(GamePlayer gamePlayer, Server gameServer) {
+    public Leaderboard(JPoker24Game gamePlayer, Server gameServer) {
         super(gamePlayer, gameServer);
         highlightActiveTab(leaderboardTab);
     }

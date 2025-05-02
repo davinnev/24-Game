@@ -22,7 +22,7 @@ import javax.jms.Message;
 
 
 // This class serves as the client as a player in the game
-public class GamePlayer implements Runnable  {
+public class JPoker24Game implements Runnable  {
 
     private Server gameServer;
     private JFrame frame;
@@ -58,10 +58,10 @@ public class GamePlayer implements Runnable  {
 
     // This function helps with connecting with the RMI registry service
     // Also to set up the connection with JMS queue
-    public GamePlayer(String host) throws NamingException, JMSException {
+    public JPoker24Game(String host) throws NamingException, JMSException {
         try {
             Registry registry = LocateRegistry.getRegistry("localhost");
-            this.gameServer = (Server)registry.lookup("GameServer");
+            this.gameServer = (Server)registry.lookup("JPoker24GameServer");
             System.out.println("Server found" + this.gameServer);
         } catch (Exception e){
             System.err.println("Error accessing RMI: " + e.toString());
@@ -179,16 +179,16 @@ public class GamePlayer implements Runnable  {
                             if (text.startsWith("Game started for ")) {
                                 String[] usernames = text.split(" ");
                                 for (String uname : usernames) {
-                                    if (GamePlayer.this.getUsername().trim().equals(uname.trim())) {
+                                    if (JPoker24Game.this.getUsername().trim().equals(uname.trim())) {
                                         System.out.println("You are already in the game");
                                         gamePanel.setGameState("PLAYING");
                                         return;
                                     }
                                 }
                             } else if (text.startsWith("Player info ")) {
-                                 GamePlayer.this.gamePanel.updatePlayersPanel(text);
+                                 JPoker24Game.this.gamePanel.updatePlayersPanel(text);
                             } else if (text.startsWith("Cards in the game ") && gamePanel.getGameState().equals("PLAYING")) {
-                                GamePlayer.this.gamePanel.displayCards(text);
+                                JPoker24Game.this.gamePanel.displayCards(text);
                             } else if (text.startsWith("Winner ")) {
                                 // show the game result
                                 // System.out.println("Received winner: " + text);
@@ -217,9 +217,9 @@ public class GamePlayer implements Runnable  {
 
     public static void main(String[] args){
         String host = "localhost";
-        GamePlayer player = null;
+        JPoker24Game player = null;
         try {
-            player = new GamePlayer(host);
+            player = new JPoker24Game(host);
             SwingUtilities.invokeLater(player);
         } catch (NamingException | JMSException e) {
             System.err.println("Program aborted");

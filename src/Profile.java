@@ -14,7 +14,7 @@ public class Profile extends GameLobby {
     private JLabel rankLabel;
 
     // The constructor follows superclass, then highlight the "Profile" tab
-    public Profile(GamePlayer gamePlayer, Server gameServer) {
+    public Profile(JPoker24Game gamePlayer, Server gameServer) {
         super(gamePlayer, gameServer);
         highlightActiveTab(profileTab);
     }

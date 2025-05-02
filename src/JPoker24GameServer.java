@@ -25,7 +25,7 @@ import javax.jms.TopicConnectionFactory;
 import java.util.Random;
 
 // This class serves as the game server that handles client's requests
-public class GameServer extends UnicastRemoteObject implements Server{
+public class JPoker24GameServer extends UnicastRemoteObject implements Server{
     private static final String DB_HOST = "jdbc:mysql://localhost:3306/c3358";
 	private static final String DB_USER = "c3358";
 	private static final String DB_PASS = "c3358PASS";
@@ -54,7 +54,7 @@ public class GameServer extends UnicastRemoteObject implements Server{
     }
 
     // The constructor establish connection to DB, and setup queue+topic
-    public GameServer(String host) throws RemoteException, NamingException, JMSException {
+    public JPoker24GameServer(String host) throws RemoteException, NamingException, JMSException {
         // Connect to DB 
         try {
             this.dbConn = DriverManager.getConnection(DB_HOST, DB_USER, DB_PASS);
@@ -561,11 +561,11 @@ public class GameServer extends UnicastRemoteObject implements Server{
     public static void main(String[] args) {
         System.out.println("Server started");
         String host = "localhost";
-		GameServer app = null;
+		JPoker24GameServer app = null;
         try {
-            app = new GameServer(host);
+            app = new JPoker24GameServer(host);
             System.setSecurityManager(new SecurityManager());
-            Naming.rebind("GameServer", app);
+            Naming.rebind("JPoker24GameServer", app);
             System.out.println("Service registered");
         } catch (Exception e) {
             System.err.println("Server Error: " + e.getMessage());
