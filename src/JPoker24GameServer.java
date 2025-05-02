@@ -537,6 +537,8 @@ public class JPoker24GameServer extends UnicastRemoteObject implements Server{
             e.printStackTrace();
         }
         
+        updateLeaderboard();
+        
         //System.out.println("Registered and logged in as " + username);
         return true;
     }
