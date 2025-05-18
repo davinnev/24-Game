@@ -362,6 +362,9 @@ public class JPoker24GameServer extends UnicastRemoteObject implements Server{
                                 topicPublisher.publish(message);
                                 System.out.println("Published winner : " + winnerInfo);
                             }
+                        } else if (text.equals("Request Update Leaderboard")){
+                            System.out.println("Updating leaderboard");
+                            updateLeaderboard();
                         } else {
                             // This type of message is a join message from the client
                             processJoinMessage(text);
@@ -378,22 +381,36 @@ public class JPoker24GameServer extends UnicastRemoteObject implements Server{
     }
 
     // The following methods are used to update the database
-    // synchronized is used to retain consistency across server
-
 	
-    private synchronized void updatePlayersDatabase(List<String> usernames) {
+    private void updatePlayersDatabase(List<String> usernames) {
+        // We want to use transaction to ensure that the update for all players is successful
+        // Otherwise, we want rollback
         try {
+            this.dbConn.setAutoCommit(false);
             for (String username : usernames) {
                 PreparedStatement stmt = this.dbConn.prepareStatement("UPDATE user_info SET games_played = games_played + 1 WHERE username = ?");
                 stmt.setString(1, username);
                 stmt.executeUpdate();
             }
+            this.dbConn.commit();
         } catch (SQLException e) {
+            try {
+                this.dbConn.rollback();
+            } catch (SQLException e1) {
+                e1.printStackTrace();
+            }
             e.printStackTrace();
+        } finally {
+            try {
+                this.dbConn.setAutoCommit(true);
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
     }
 
-    private synchronized void updateWinnerDatabase(long gameTime, String winner) {
+    private void updateWinnerDatabase(long gameTime, String winner) {
+        // No need to use transaction since we only update one row (player) in one table (user_info)
         double winTime = gameTime / 1000.0;
         // Update the winner's games won and average win time
         try {
@@ -416,7 +433,7 @@ public class JPoker24GameServer extends UnicastRemoteObject implements Server{
         }
     }
 
-    private synchronized void updateLeaderboard() {
+    private void updateLeaderboard() {
         List<String> rankedUsernames = new ArrayList<>();
 
         try {
@@ -426,32 +443,45 @@ public class JPoker24GameServer extends UnicastRemoteObject implements Server{
             while (rs.next()) {
                 rankedUsernames.add(rs.getString("username"));
             }
-
-            
         } catch (SQLException e) {
             e.printStackTrace();
         }
 
         // Update rank of each player
-        for (int i = 0; i < rankedUsernames.size(); i++) {
-            String name = rankedUsernames.get(i);
-            int rank = i + 1;
-
-            try {
+        // Use transaction to ensure that we update all players successfully
+        try {
+            this.dbConn.setAutoCommit(false);
+            for (int i = 0; i < rankedUsernames.size(); i++) {
+                String name = rankedUsernames.get(i);
+                int rank = i + 1;
+                
                 PreparedStatement stmt = this.dbConn.prepareStatement("UPDATE user_info SET `rank` = ? WHERE username = ?");
                 stmt.setInt(1, rank);
                 stmt.setString(2, name);
                 stmt.executeUpdate();
+            }
+            this.dbConn.commit();
+        } catch (SQLException e) {
+            try {
+                this.dbConn.rollback();
+            } catch (SQLException e1) {
+                e1.printStackTrace();
+            }
+            e.printStackTrace();
+        } finally {
+            try {
+                this.dbConn.setAutoCommit(true);
             } catch (SQLException e) {
                 e.printStackTrace();
             }
         }
+
     }
 
     // The methods below handle user authentication
 
     // This function handles login request from the client
-    public synchronized boolean login(String username, String password) throws RemoteException {
+    public boolean login(String username, String password) throws RemoteException {
         //System.out.println("Login request for: " + username);
 
         boolean isPasswordCorrect = false;
@@ -501,50 +531,55 @@ public class JPoker24GameServer extends UnicastRemoteObject implements Server{
     }
 
     // This function handles register (sign up) request from the client
-    public synchronized boolean register(String username, String password) throws RemoteException {
+    public boolean register(String username, String password) throws RemoteException {
+        boolean isRegisterSuccess = false;
         //System.out.println("Registration request for: " + username);
 
-        // Check if username alread exists in user_info to avoid duplicate username
         try {
-            PreparedStatement stmt = this.dbConn.prepareStatement("SELECT username FROM user_info WHERE username = ?");
-            stmt.setString(1, username);
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()) {
+            this.dbConn.setAutoCommit(false);
+            // Check if username alread exists in user_info to avoid duplicate username
+            PreparedStatement stmt1 = this.dbConn.prepareStatement("SELECT username FROM user_info WHERE username = ?");
+            stmt1.setString(1, username);
+            ResultSet rs1 = stmt1.executeQuery();
+            if (rs1.next()) {
+                this.dbConn.rollback();
                 return false;
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
 
-        // Insert into user_info
-        try {
-            PreparedStatement stmt = this.dbConn.prepareStatement("INSERT INTO user_info (username, password) VALUES (?, ?)");
-            stmt.setString(1, username);
-            stmt.setString(2, password);
-            stmt.execute();
+            // Insert into user_info
+            PreparedStatement stmt2 = this.dbConn.prepareStatement("INSERT INTO user_info (username, password) VALUES (?, ?)");
+            stmt2.setString(1, username);
+            stmt2.setString(2, password);
+            stmt2.execute();
             System.out.println("User added to USER INFO");
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
 
-        // Insert into online_user
-        try {
-            PreparedStatement stmt = this.dbConn.prepareStatement("INSERT INTO online_user (username) VALUES (?)");
-            stmt.setString(1, username);
-            stmt.execute();
+            // Insert into online_user
+            PreparedStatement stmt3 = this.dbConn.prepareStatement("INSERT INTO online_user (username) VALUES (?)");
+            stmt3.setString(1, username);
+            stmt3.execute();
+            this.dbConn.commit();
+            isRegisterSuccess = true;
             System.out.println("User added to ONLINE USERS");
         } catch (SQLException e) {
+            try {
+                this.dbConn.rollback();
+            } catch (SQLException e1) {
+                e1.printStackTrace();
+            }
             e.printStackTrace();
+        } finally {
+            try {
+                this.dbConn.setAutoCommit(true);
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
-        
-        updateLeaderboard();
-        
         //System.out.println("Registered and logged in as " + username);
-        return true;
+        return isRegisterSuccess;
     }
 
     // This function handles logout request from the client
-    public synchronized boolean logout(String username) throws RemoteException {
+    public boolean logout(String username) throws RemoteException {
         //System.out.println("Logout request for: " + username);
 
         // Update online_user. Remove the username from the list

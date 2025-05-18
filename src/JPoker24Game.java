@@ -122,9 +122,11 @@ public class JPoker24Game implements Runnable  {
     }
 
     public void sendMessageToQueue() throws JMSException {
-        createConnection();
-        createSession();
-        createSender();			
+        if (session == null) {
+            createConnection();
+            createSession();
+            createSender();
+        }			
         TextMessage message = session.createTextMessage(); 
         String messageContent = this.username + " " + String.valueOf(System.currentTimeMillis() / 1000); 
         message.setText(messageContent);
@@ -277,7 +279,21 @@ public class JPoker24Game implements Runnable  {
         profilePanel.refreshProfile();
     }
 
-    public void showLeaderboard() {
+    public void showLeaderboard() throws JMSException {
+        if (session == null) {
+            createConnection();
+            createSession();
+            createSender();		
+        }
+        try {
+            TextMessage message = session.createTextMessage(); 
+            String messageContent = "Request Update Leaderboard"; 
+            message.setText(messageContent);
+            queueSender.send(message);
+            System.out.println("Sending message "+ messageContent);
+        } catch (JMSException e) {
+            System.err.println("Failed to send message: " + e);
+        }
         if (leaderboardPanel == null) {
             leaderboardPanel = new Leaderboard(this, gameServer);
             cardPanel.add(leaderboardPanel, "leaderboard");

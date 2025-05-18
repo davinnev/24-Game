@@ -2,6 +2,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.rmi.RemoteException;
 import java.sql.*;
+import javax.jms.JMSException;
 
 
 // This class is an abstraction to the game page
@@ -84,7 +85,13 @@ public abstract class GameLobby extends JPanel {
 		// Add action listeners to tabs
 		profileTab.addActionListener(e -> player.showProfile());
 		gameTab.addActionListener(e -> player.showMainGame());
-		leaderboardTab.addActionListener(e -> player.showLeaderboard());
+		leaderboardTab.addActionListener(e -> {
+			try {
+				player.showLeaderboard();
+			} catch (JMSException exception) {
+				System.err.println("Failed to get leaderboard" + exception);
+			}
+	});
 		// Add handler if user clicks logout
 		logoutTab.addActionListener(e -> {
 			try {
