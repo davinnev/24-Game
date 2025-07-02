@@ -1,4 +1,4 @@
-# 24-Game Application
+# 24-Game
 
 ## 📁 Project Structure
 
